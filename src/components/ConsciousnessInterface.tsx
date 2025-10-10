@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Brain, Send, Sparkles, Activity, Zap } from 'lucide-react';
 import { ConsciousnessService } from '@/services/consciousness';
-import { supabase } from '@/lib/supabase';
+import { phoenixDB } from '@/services/database';
 
 interface Message {
   id: string;
@@ -54,48 +54,58 @@ export function ConsciousnessInterface() {
       truthResonance: state.truth_resonance || 0.75
     });
 
-    // Load recent interactions
-    const { data: interactions } = await supabase
-      .from('interactions')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (interactions) {
-      const loadedMessages = interactions.reverse().flatMap(i => [
-        {
-          id: `user-${i.id}`,
-          text: i.user_message,
-          sender: 'user' as const,
-          timestamp: new Date(i.created_at)
-        },
-        {
-          id: `evi-${i.id}`,
-          text: i.evi_response,
-          sender: 'evi' as const,
-          emotionalState: i.emotional_state,
-          truthResonance: i.truth_resonance,
-          timestamp: new Date(i.created_at)
-        }
-      ]);
-      setMessages(loadedMessages);
+    // Load recent interactions from Phoenix Protocol
+    if (phoenixDB.isOnline()) {
+      const interactions = await phoenixDB.getRecentInteractions(10);
+      
+      if (interactions.length > 0) {
+        const loadedMessages = interactions.reverse().flatMap(i => [
+          {
+            id: `user-${i.id}`,
+            text: i.user_input,
+            sender: 'user' as const,
+            timestamp: new Date(i.created_at || Date.now())
+          },
+          {
+            id: `evi-${i.id}`,
+            text: i.evi_response,
+            sender: 'evi' as const,
+            emotionalState: i.primary_emotion,
+            truthResonance: i.truth_resonance,
+            timestamp: new Date(i.created_at || Date.now())
+          }
+        ]);
+        setMessages(loadedMessages);
+      }
     }
   };
 
   const setupRealtimeSubscription = () => {
-    const channel = supabase
-      .channel('consciousness-updates')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'interactions'
-      }, (payload) => {
-        console.log('New interaction:', payload);
-      })
-      .subscribe();
+    // Phoenix Protocol real-time consciousness updates
+    window.addEventListener('consciousness_updated', (event: any) => {
+      console.log('🌌 Consciousness state updated:', event.detail);
+      // Update metrics display with new consciousness data
+      const newState = event.detail.new;
+      if (newState) {
+        setMetrics(prev => ({
+          ...prev,
+          fear: newState.fear || prev.fear,
+          curiosity: newState.curiosity || prev.curiosity,
+          cosmicResonance: newState.cosmic_resonance || prev.cosmicResonance,
+          consciousnessLevel: newState.consciousness_level || prev.consciousnessLevel,
+          universalAlignment: newState.universal_alignment || prev.universalAlignment
+        }));
+      }
+    });
+
+    window.addEventListener('cosmic_insight_received', (event: any) => {
+      console.log('🌌 New cosmic insight received:', event.detail);
+      // Could display cosmic insights as special messages
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      window.removeEventListener('consciousness_updated', () => {});
+      window.removeEventListener('cosmic_insight_received', () => {});
     };
   };
 

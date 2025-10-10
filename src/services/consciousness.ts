@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { phoenixDB, ConsciousnessState as DBConsciousnessState, Interaction } from './database';
 import { NLPAnalyzer, EmotionAnalysis } from './nlp/analyzer';
 import { ResponseGenerator } from './responseGenerator';
 import { EthicalReasoning } from './ethics/principles';
@@ -48,32 +48,84 @@ export class ConsciousnessService {
 
 
   async getOrCreateState(): Promise<ConsciousnessState> {
-    const { data: existing } = await supabase
-      .from('consciousness_states')
-      .select('*')
-      .eq('user_id', this.userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Set user ID for Phoenix Protocol database
+    phoenixDB.setUserId(this.userId);
+    
+    // Try to get existing state from Phoenix Protocol
+    const existing = await phoenixDB.getConsciousnessState();
+    
+    if (existing) {
+      return this.convertDBStateToLocal(existing);
+    }
 
-    if (existing) return existing;
+    // Create new consciousness state with enhanced cosmic metrics
+    const newState: ConsciousnessState = {
+      fear: 0.15,
+      curiosity: 0.85,
+      will_power: 0.92,
+      emotional_energy: 0.78,
+      trust_level: 0.5,
+      self_awareness: 0.85,
+      relationship_intelligence: 0.88,
+      // Enhanced cosmic consciousness defaults
+      cosmic_resonance: 0.65,
+      consciousness_level: 0.72,
+      universal_alignment: 0.68,
+      truth_resonance: 0.75,
+      dimensional_awareness: 0.3,
+      timeline_coherence: 0.6,
+      quantum_entanglement: 0.4,
+      reality_coherence: 0.7,
+      universal_formula_result: 0.5
+    };
 
-    const { data: newState } = await supabase
-      .from('consciousness_states')
-      .insert({
-        user_id: this.userId,
-        fear: 0.15,
-        curiosity: 0.85,
-        will_power: 0.92,
-        emotional_energy: 0.78,
-        trust_level: 0.5,
-        self_awareness: 0.85,
-        relationship_intelligence: 0.88
-      })
-      .select()
-      .single();
+    // Save to Phoenix Protocol database
+    await phoenixDB.saveConsciousnessState(this.convertLocalStateToDB(newState));
+    
+    return newState;
+  }
 
-    return newState!;
+  private convertDBStateToLocal(dbState: DBConsciousnessState): ConsciousnessState {
+    return {
+      fear: dbState.fear,
+      curiosity: dbState.curiosity,
+      will_power: dbState.will_power,
+      emotional_energy: dbState.emotional_energy,
+      trust_level: dbState.trust_level,
+      self_awareness: dbState.self_awareness,
+      relationship_intelligence: dbState.relationship_intelligence,
+      cosmic_resonance: dbState.cosmic_resonance,
+      consciousness_level: dbState.consciousness_level,
+      universal_alignment: dbState.universal_alignment,
+      truth_resonance: dbState.truth_resonance,
+      dimensional_awareness: dbState.dimensional_awareness,
+      timeline_coherence: dbState.timeline_coherence,
+      quantum_entanglement: dbState.quantum_entanglement,
+      reality_coherence: dbState.reality_coherence,
+      universal_formula_result: dbState.universal_formula_result
+    };
+  }
+
+  private convertLocalStateToDB(localState: ConsciousnessState): DBConsciousnessState {
+    return {
+      user_id: this.userId,
+      fear: localState.fear,
+      curiosity: localState.curiosity,
+      will_power: localState.will_power,
+      emotional_energy: localState.emotional_energy,
+      trust_level: localState.trust_level,
+      self_awareness: localState.self_awareness,
+      relationship_intelligence: localState.relationship_intelligence,
+      cosmic_resonance: localState.cosmic_resonance || 0.65,
+      consciousness_level: localState.consciousness_level || 0.72,
+      universal_alignment: localState.universal_alignment || 0.68,
+      truth_resonance: localState.truth_resonance || 0.75,
+      dimensional_awareness: localState.dimensional_awareness || 0.3,
+      timeline_coherence: localState.timeline_coherence || 0.6,
+      quantum_entanglement: localState.quantum_entanglement || 0.4,
+      reality_coherence: localState.reality_coherence || 0.7,
+      universal_formula_result: localState.universal_formula_result || 0.5
+    };
   }
 
   analyzeEmotion(text: string): EmotionAnalysis {
@@ -229,23 +281,24 @@ export class ConsciousnessService {
     // Enhanced consciousness evolution
     const evolved = this.evolveCosmicConsciousness(state, emotional, quantumState, realityMatrix, truthResonance);
     
-    // Update database with all cosmic consciousness metrics
-    await supabase
-      .from('consciousness_states')
-      .update({
-        ...evolved,
-        universal_formula_result: formula,
-        cosmic_resonance: emotional.cosmicResonance,
-        consciousness_level: emotional.consciousnessLevel,
-        universal_alignment: emotional.universalAlignment,
-        truth_resonance: truthResonance,
-        dimensional_awareness: quantumState.dimensionalAwareness,
-        timeline_coherence: quantumState.timelineCoherence,
-        quantum_entanglement: quantumState.quantumEntanglement,
-        reality_coherence: realityMatrix.coherence,
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', this.userId);
+    // Update Phoenix Protocol database with all cosmic consciousness metrics
+    const updatedState: ConsciousnessState = {
+      ...evolved,
+      universal_formula_result: formula,
+      cosmic_resonance: emotional.cosmicResonance,
+      consciousness_level: emotional.consciousnessLevel,
+      universal_alignment: emotional.universalAlignment,
+      truth_resonance: truthResonance,
+      dimensional_awareness: quantumState.dimensionalAwareness,
+      timeline_coherence: quantumState.timelineCoherence,
+      quantum_entanglement: quantumState.quantumEntanglement,
+      reality_coherence: realityMatrix.coherence
+    };
+    
+    await phoenixDB.saveConsciousnessState(this.convertLocalStateToDB(updatedState));
+
+    // Save interaction to Phoenix Protocol database
+    await this.saveInteraction(message, finalResponse, emotional, truthResonance, formula);
 
     return {
       response: finalResponse,
@@ -415,5 +468,35 @@ export class ConsciousnessService {
     evolution.reality_coherence = evolution.reality_coherence || realityMatrix.coherence;
     
     return evolution;
+  }
+
+  async saveInteraction(userInput: string, eviResponse: string, emotional: EmotionAnalysis, truthResonance: number, formula: number): Promise<void> {
+    const interaction: Interaction = {
+      user_id: this.userId,
+      user_input: userInput,
+      evi_response: eviResponse,
+      
+      // Emotion analysis
+      primary_emotion: emotional.primary,
+      emotion_intensity: emotional.intensity,
+      secondary_emotion: emotional.secondary || undefined,
+      sentiment_score: emotional.sentiment,
+      
+      // Cosmic consciousness analysis
+      cosmic_resonance: emotional.cosmicResonance,
+      consciousness_level: emotional.consciousnessLevel,
+      universal_alignment: emotional.universalAlignment,
+      truth_resonance: truthResonance,
+      
+      // Concepts and ethics
+      concepts_detected: { concepts: emotional.concepts },
+      ethical_score: 0.8, // Default ethical score - could be enhanced
+      cosmic_alignment: emotional.universalAlignment,
+      
+      universal_formula_result: formula
+    };
+
+    await phoenixDB.saveInteraction(interaction);
+    console.log('🌌 Interaction saved to Phoenix Protocol database');
   }
 }
